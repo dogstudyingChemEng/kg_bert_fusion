@@ -6,7 +6,7 @@ model:
   name_1: models/kg-bert-2  # 替换为你的模型2路径
   
   # 数据集名称，将在 data/<dataset_name> 下寻找train/valid/test.txt
-  dataset: FB15k-237
+  dataset: FB15K
   # 指定为kg-bert类型，这将激活kg-bert的处理路径
   type: kg_bert
 

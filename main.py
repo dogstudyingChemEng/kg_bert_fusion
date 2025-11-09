@@ -235,7 +235,7 @@ def load_weights_and_model(args, key):
         # 假设 'data' 目录位于 'transformer-fusion' 目录的上一级
         # (即 'transformer-fusion' 和 'data' 在同一个父目录下)
         # 如果 'data' 目录在 'transformer-fusion' 内部，请改为 'os.path.join(os.path.dirname(__file__), 'data')'
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data') 
+        data_dir = os.path.join(os.path.dirname(__file__), 'data') 
         relations_file = os.path.join(data_dir, args['model']['dataset'], "relations.txt")
         if not os.path.exists(relations_file):
             raise FileNotFoundError(f"relations.txt not found at {relations_file}. Cannot determine num_labels.")
@@ -280,7 +280,7 @@ def get_model(args, weights):
     # --- 修正/实现 (3): 复制 hf_vit 的逻辑并为 kg_bert 调整 ---
     elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
         # 同样需要 num_labels 来实例化基础模型
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data') 
+        data_dir = os.path.join(os.path.dirname(__file__), 'data') 
         relations_file = os.path.join(data_dir, args['model']['dataset'], "relations.txt")
         if not os.path.exists(relations_file):
             raise FileNotFoundError(f"relations.txt not found at {relations_file}. Cannot determine num_labels.")
@@ -338,7 +338,7 @@ def get_dataloader(args, device):
                                                 shuffle=False)
     # --- 修正/实现 (4): 实现 kg_bert 的 get_dataloader ---
     elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        data_dir = os.path.join(os.path.dirname(__file__), 'data')
         val_ds, _, relations_list = kg_bert_helper.load_dataset_kgbert(
             args['model']['dataset'], 
             data_dir,
@@ -365,7 +365,7 @@ def get_dataloader(args, device):
             label_map=label_map,
             max_len=max_len 
         )
-        val_ds.set_transform(transform_func) # 应用转换
+        val_ds = val_ds.map(transform_func) # 应用转换
 
         # 为激活计算创建 DataLoader，batch_size=1
         dataloader = torch.utils.data.DataLoader(
@@ -399,7 +399,7 @@ def get_test_dataloader(args, device):
         _, test_dataloader = vit_helper.load_dataset_vit(args['model']['dataset'])
     elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
         # --- 修正/实现 (5): 实现 kg_bert 的 get_test_dataloader ---
-        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        data_dir = os.path.join(os.path.dirname(__file__), 'data')
         # 加载 test_ds 和 relations_list
         _, test_ds, relations_list = kg_bert_helper.load_dataset_kgbert(
             args['model']['dataset'], 
@@ -420,7 +420,7 @@ def get_test_dataloader(args, device):
             label_map=label_map,
             max_len=max_len 
         )
-        test_ds.set_transform(transform_func) # 应用转换
+        test_ds = test_ds.map(transform_func) # 应用转换
 
         # 从 args 中获取评估批次大小，默认为 8 (类似 run_bert_relation_prediction.py)
         eval_batch_size = args.get('eval_batch_size', 8) 
@@ -492,7 +492,7 @@ def do_vanilla_fusion(args, weights, model_0, model_1):
             model_vanilla_fused = get_model(args, w_vf_fused)
         else:
             # 需要 num_labels 来实例化基础模型
-            data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+            data_dir = os.path.join(os.path.dirname(__file__), 'data')
             relations_file = os.path.join(data_dir, args['model']['dataset'], "relations.txt")
             relations_list = []
             with open(relations_file, 'r', encoding='utf-8') as f:

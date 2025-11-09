@@ -52,10 +52,14 @@ def load_dataset_kgbert(dataset_name, data_dir, seed=0):
     """
     log.info(f"Loading KG dataset '{dataset_name}' from: {data_dir} for Relation Prediction")
     
-    val_file = os.path.join(data_dir, "dev.tsv")
-    test_file = os.path.join(data_dir, "test.tsv")
-    entity_text_file = os.path.join(data_dir, "entity2text.txt")
-    relations_file = os.path.join(data_dir, "relations.txt")
+    # --- 修正: 必须在这里组合 data_dir 和 dataset_name ---
+    base_path = os.path.join(data_dir, dataset_name)
+    # --- 结束修正 ---
+
+    val_file = os.path.join(base_path, "dev.tsv")
+    test_file = os.path.join(base_path, "test.tsv")
+    entity_text_file = os.path.join(base_path, "entity2text.txt")
+    relations_file = os.path.join(base_path, "relations.txt")
     
     # 1. 加载实体到文本的映射
     ent2text = {}
@@ -137,7 +141,7 @@ def preprocess_kgbert_single(example, tokenizer, label_map, max_len):
         "input_ids": torch.tensor(input_ids, dtype=torch.long),
         "attention_mask": torch.tensor(input_mask, dtype=torch.long),
         "token_type_ids": torch.tensor(segment_ids, dtype=torch.long),
-        "label": torch.tensor(label_id, dtype=torch.long)
+        "label": label_id
     }
 
 def collate_fn_kgbert(examples):
@@ -148,7 +152,7 @@ def collate_fn_kgbert(examples):
     input_ids = torch.stack([example["input_ids"] for example in examples])
     attention_mask = torch.stack([example["attention_mask"] for example in examples])
     token_type_ids = torch.stack([example["token_type_ids"] for example in examples])
-    labels = torch.stack([example["label"] for example in examples])
+    labels = torch.tensor([example["label"] for example in examples], dtype=torch.long)
     
     return {
         "input_ids": input_ids,
