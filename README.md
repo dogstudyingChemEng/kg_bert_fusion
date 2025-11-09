@@ -43,7 +43,10 @@ pip install -r requirements.txt
 ```
 python main.py fuse_hf_vit_cifar10.yaml
 ```
-
+kg-bert的实验：
+```
+python main.py kg_bert_fusion.yaml
+```
 ---
 
 ## Code Structure
@@ -95,3 +98,4 @@ The evaluation step evaluates and reports the accuracies of the parent models, t
   url={https://openreview.net/forum?id=LjeqMvQpen}
 }
 ```
+
