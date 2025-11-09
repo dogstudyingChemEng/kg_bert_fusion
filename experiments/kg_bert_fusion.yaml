@@ -1,0 +1,58 @@
+# Configuration for KG-BERT fusion experiment
+model:
+  # 这里填入你的两个预训练好的KG-BERT模型路径
+  # 可以是本地路径（models/kg_bert_model1）或Huggingface模型ID
+  name_0: models/kg-bert-1  # 替换为你的模型1路径
+  name_1: models/kg-bert-2  # 替换为你的模型2路径
+  
+  # 数据集名称，将在 data/<dataset_name> 下寻找train/valid/test.txt
+  dataset: FB15k-237
+  # 指定为kg-bert类型，这将激活kg-bert的处理路径
+  type: kg_bert
+
+# Fusion参数配置
+fusion:
+  num_models: 2
+  type: acts  # 基于激活值的融合
+  resid_policy: mean  # 残差连接的处理策略
+  
+  # BERT模型结构相关的融合开关
+  fuse_src_embed: True   # 融合词嵌入层
+  fuse_sa: True         # 融合自注意力层
+  fuse_norm: True       # 融合LayerNorm层
+  fuse_fc: True        # 融合全连接层
+  fuse_bias: True      # 融合偏置项
+  fuse_gen: True       # 融合分类头
+  
+  # OT求解器配置
+  ot_solver: sinkhorn
+  sinkhorn_reg: 0.08
+  
+  # Ground metric配置
+  gnd_metric:
+    type: euclidean
+    norm: max
+    reg: 0.01
+    mem_eff: True
+    squared: False
+    clip: False
+  
+  # 激活值处理配置
+  acts:
+    num_samples: 100    # 用于计算OT的样本数，可以先设小一点测试
+    seq_pos: -1        # 使用序列中的所有位置
+    avg_seq_items: False # 对序列中的token取平均
+    seq_filter: 'only_cls'
+    loss_thres: False  # 不使用loss阈值过滤
+    mode: raw
+    seed: 42
+    # 激活值标准化选项
+    std: True
+    center: True
+    norm: False
+  
+  wts:
+    norm: True
+
+regression:
+  only_eval_ot: False  # 设为True则仅评估OT融合结果

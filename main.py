@@ -6,9 +6,18 @@ from otfusion.hf_vit_fusion import hf_vit_fusion
 from otfusion.utils import get_activations, accumulate_nested_dicts, divide_nested_dicts, multi_model_vanilla, model_to_dict, vanilla_fusion_old, model_eq_size_check
 sys.path.append(os.path.join(os.path.dirname(__file__), "vit"))
 from vit import vit_helper
+sys.path.append(os.path.join(os.path.dirname(__file__), "kg_bert"))
+from kg_bert import kg_bert_helper
+from otfusion.hf_bert_fusion import hf_bert_fusion
 import numpy as np
 
 from datasets import config as ds_config
+
+# --- 修正/实现 (1): 添加所需 imports ---
+from transformers import BertTokenizer
+from functools import partial
+# --- 结束 修正/实现 (1) ---
+
 
 def main(exp = None, exp_mod = None, log_file = None):
     """
@@ -221,6 +230,24 @@ def load_weights_and_model(args, key):
     if args['model']['type'] == 'hf_vit':
         model = vit_helper.get_model('{0}'.format(args['model'][key]))
         weights = model_to_dict(model)
+    elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
+        # --- 修正/实现 (2): 必须获取 num_labels 才能加载模型 ---
+        # 假设 'data' 目录位于 'transformer-fusion' 目录的上一级
+        # (即 'transformer-fusion' 和 'data' 在同一个父目录下)
+        # 如果 'data' 目录在 'transformer-fusion' 内部，请改为 'os.path.join(os.path.dirname(__file__), 'data')'
+        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data') 
+        relations_file = os.path.join(data_dir, args['model']['dataset'], "relations.txt")
+        if not os.path.exists(relations_file):
+            raise FileNotFoundError(f"relations.txt not found at {relations_file}. Cannot determine num_labels.")
+        relations_list = []
+        with open(relations_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                relations_list.append(line.strip())
+        num_labels = len(relations_list)
+        
+        model = kg_bert_helper.get_model('{0}'.format(args['model'][key]), num_labels=num_labels)
+        # --- 结束 修正/实现 (2) ---
+        weights = model_to_dict(model)
     else:
         raise NotImplementedError
     return weights, model
@@ -249,6 +276,39 @@ def get_model(args, weights):
                 temp_model = getattr(temp_model, w)
                 temp_dict = temp_dict[w]
             setattr(temp_model, words[-1], torch.nn.parameter.Parameter(temp_dict[words[-1]]))
+    
+    # --- 修正/实现 (3): 复制 hf_vit 的逻辑并为 kg_bert 调整 ---
+    elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
+        # 同样需要 num_labels 来实例化基础模型
+        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data') 
+        relations_file = os.path.join(data_dir, args['model']['dataset'], "relations.txt")
+        if not os.path.exists(relations_file):
+            raise FileNotFoundError(f"relations.txt not found at {relations_file}. Cannot determine num_labels.")
+        relations_list = []
+        with open(relations_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                relations_list.append(line.strip())
+        num_labels = len(relations_list)
+        
+        # 加载基础模型（例如 model_1）的架构
+        model = kg_bert_helper.get_model('{0}'.format(args['model']['name_1']), num_labels=num_labels)
+        
+        # 将融合后的权重 (weights) 填入新模型
+        for name, _ in model.named_parameters():
+            words = name.split('.')
+            temp_model = model
+            temp_dict = weights
+            try:
+                for w in words[:-1]:
+                    temp_model = getattr(temp_model, w)
+                    temp_dict = temp_dict[w]
+                # 确保权重是 Parameter 类型
+                param = torch.nn.parameter.Parameter(temp_dict[words[-1]])
+                setattr(temp_model, words[-1], param)
+            except KeyError:
+                log.warning(f"Key {name} not found in fused weights dict. Using original model_1 weights.")
+        return model
+    # --- 结束 修正/实现 (3) ---
     else:
         raise NotImplementedError
     return model
@@ -276,6 +336,45 @@ def get_dataloader(args, device):
                                                 collate_fn=vit_helper.collate_fn,
                                                 batch_size=1,
                                                 shuffle=False)
+    # --- 修正/实现 (4): 实现 kg_bert 的 get_dataloader ---
+    elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
+        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        val_ds, _, relations_list = kg_bert_helper.load_dataset_kgbert(
+            args['model']['dataset'], 
+            data_dir,
+            args['fusion']['acts']['seed']
+        )
+        
+        # 创建 label_map (关系 -> 索引)
+        label_map = {label: i for i, label in enumerate(relations_list)}
+        # 从 run_bert_relation_prediction.py 获取 max_seq_length，默认为 128
+        max_len = args.get('max_seq_length', 128) 
+        
+        # 加载 Tokenizer，假设它与 model_1 相同
+        # 优先从 args['model']['name_1'] 加载，如果失败则回退
+        try:
+            tokenizer = BertTokenizer.from_pretrained(args['model']['name_1'], do_lower_case=True)
+        except Exception:
+            log.warning(f"Could not load tokenizer from {args['model']['name_1']}. Defaulting to 'bert-base-uncased'.")
+            tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+
+        # 使用 functools.partial 传递固定参数 (tokenizer, label_map, max_len) 给转换函数
+        transform_func = partial(
+            kg_bert_helper.preprocess_kgbert_single,
+            tokenizer=tokenizer,
+            label_map=label_map,
+            max_len=max_len 
+        )
+        val_ds.set_transform(transform_func) # 应用转换
+
+        # 为激活计算创建 DataLoader，batch_size=1
+        dataloader = torch.utils.data.DataLoader(
+            dataset=val_ds,
+            collate_fn=kg_bert_helper.collate_fn_kgbert,
+            batch_size=1, # 激活计算通常使用 batch_size=1
+            shuffle=False
+        )
+    # --- 结束 修正/实现 (4) ---
     else:
         raise NotImplementedError
     return dataloader
@@ -298,6 +397,41 @@ def get_test_dataloader(args, device):
     """
     if args['model']['type'] == 'hf_vit':
         _, test_dataloader = vit_helper.load_dataset_vit(args['model']['dataset'])
+    elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
+        # --- 修正/实现 (5): 实现 kg_bert 的 get_test_dataloader ---
+        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        # 加载 test_ds 和 relations_list
+        _, test_ds, relations_list = kg_bert_helper.load_dataset_kgbert(
+            args['model']['dataset'], 
+            data_dir
+        )
+        
+        label_map = {label: i for i, label in enumerate(relations_list)}
+        max_len = args.get('max_seq_length', 128)
+        
+        try:
+            tokenizer = BertTokenizer.from_pretrained(args['model']['name_1'], do_lower_case=True)
+        except Exception:
+            tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+        
+        transform_func = partial(
+            kg_bert_helper.preprocess_kgbert_single,
+            tokenizer=tokenizer,
+            label_map=label_map,
+            max_len=max_len 
+        )
+        test_ds.set_transform(transform_func) # 应用转换
+
+        # 从 args 中获取评估批次大小，默认为 8 (类似 run_bert_relation_prediction.py)
+        eval_batch_size = args.get('eval_batch_size', 8) 
+
+        test_dataloader = torch.utils.data.DataLoader(
+            dataset=test_ds,
+            collate_fn=kg_bert_helper.collate_fn_kgbert,
+            batch_size=eval_batch_size, # 使用评估批次大小
+            shuffle=False
+        )
+        # --- 结束 修正/实现 (5) ---
     else:
         raise NotImplementedError
     return test_dataloader
@@ -322,8 +456,10 @@ def do_otfusion(args, weights, acts, alpha, device, LOGGING_LEVEL, log_file):
     """
     if args['model']['type'] == 'hf_vit':
         w_fused = hf_vit_fusion(args = args, weights = weights, acts = acts, alpha = alpha, device = device, LOGGING_LEVEL = LOGGING_LEVEL, log_file = log_file)
+    elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
+        w_fused = hf_bert_fusion(args = args, weights = weights, acts = acts, alpha = alpha, device = device, LOGGING_LEVEL = LOGGING_LEVEL, log_file = log_file)
     else:
-        raise NotImplementedError
+        raise NotImplementedError('Unsupported model type: {0}'.format(args['model']['type']))
     return w_fused
 
 def do_vanilla_fusion(args, weights, model_0, model_1):
@@ -348,6 +484,27 @@ def do_vanilla_fusion(args, weights, model_0, model_1):
         else:
             model_vanilla_fused = vit_helper.get_model('{0}'.format(args['model']['name_0']))
             model_vanilla_fused = vanilla_fusion_old(model_0, model_1, model_vanilla_fused)
+    
+    # --- 修正/实现 (6): 实现 kg_bert 的 vanilla fusion ---
+    elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
+        if args['fusion']['num_models'] > 2:
+            w_vf_fused = multi_model_vanilla(args, weights)
+            model_vanilla_fused = get_model(args, w_vf_fused)
+        else:
+            # 需要 num_labels 来实例化基础模型
+            data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+            relations_file = os.path.join(data_dir, args['model']['dataset'], "relations.txt")
+            relations_list = []
+            with open(relations_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    relations_list.append(line.strip())
+            num_labels = len(relations_list)
+            
+            # 加载基础模型架构 (例如 model_0)
+            model_vanilla_fused = kg_bert_helper.get_model('{0}'.format(args['model']['name_0']), num_labels=num_labels)
+            # 应用 vanilla_fusion_old (平均权重)
+            model_vanilla_fused = vanilla_fusion_old(model_0, model_1, model_vanilla_fused)
+    # --- 结束 修正/实现 (6) ---
     else:
         raise NotImplementedError
     return model_vanilla_fused
@@ -369,6 +526,12 @@ def get_test_acc(args, model, dataloader, device):
     """
     if args['model']['type'] == 'hf_vit':
         acc = vit_helper.evaluate_vit(model, dataloader)
+    
+    # --- 修正/实现 (7): 实现 kg_bert 的 get_test_acc ---
+    elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
+        # dataloader 已经由 get_test_dataloader 准备好了
+        acc = kg_bert_helper.evaluate_kgbert(model, dataloader, device)
+    # --- 结束 修正/实现 (7) ---
     else:
         raise NotImplementedError
     return acc

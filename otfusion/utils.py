@@ -50,7 +50,10 @@ def histogram_to_str(histogram, bins):
     max_freq     = np.max(histogram)
     max_len_hist = len(str(max_freq))
     # get commandline width
-    cmd_width = os.get_terminal_size().columns
+    try:
+        cmd_width = os.get_terminal_size().columns
+    except OSError:
+        cmd_width = 80 # Default width if terminal size can't be determined
     ret = ''
     for i in range(len(histogram)):
         ratio = histogram[i]/max_freq
@@ -294,10 +297,14 @@ def transform_acts(args, acts, models, log, device):
             if seq_filter != None:
                 log.warning(" seq_filter is not None but avg_seq_items is True; Which means that the seq_filter option is ignored.")
         else:
+            # --- 修正/实现 (3): 添加 kg_bert 的日志记录逻辑 ---
             if seq_filter == 'window_2' or seq_filter == 'window_4' or seq_filter == 'window_6' or seq_filter == 'window_8' and args['model']['type'] == 'hf_vit':
                 log.info(" Flattening activations and only pick middle window ({0}x{0}) of activations (+ class token)".format(args['fusion']['acts']['seq_filter'][-1]))
             elif seq_filter == 'only_cls'  and args['model']['type'] == 'hf_vit':
                 log.info(" Only taking class token as an activations".format(args['fusion']['acts']['seq_filter'][-1]))
+            elif seq_filter == 'only_cls' and (args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert'):
+                log.info(" Only taking [CLS] token as activations")
+            # --- 结束 修正/实现 (3) ---
             else:
                 log.info(" Flattening activations (each sequence element becomes an activation)")
     else:
@@ -449,6 +456,33 @@ def forward_pass(model_type, args, model, data, data_item_no, device):
         model.to(device)
         pred = model(data["pixel_values"].to(device))
         data = [None, data['labels']]
+    elif model_type.startswith('hf_bert') or model_type == 'kg_bert':
+        # Expect data to be a mapping with input_ids, attention_mask, token_type_ids and label
+        model.to(device)
+        # move tensor fields to device if present
+        inputs = {}
+        if isinstance(data, dict):
+            for k in ['input_ids', 'attention_mask', 'token_type_ids']:
+                if k in data:
+                    inputs[k] = data[k].to(device)
+            # some dataloaders pack labels under 'label' or 'labels'
+            label = data.get('label', data.get('labels', None))
+            if label is not None and isinstance(label, torch.Tensor):
+                label = label.to(device)
+            pred = model(**inputs)
+            data = [None, label]
+        else:
+            # If dataset yields HF Dataset item, try to construct inputs
+            try:
+                inputs = {k: data[k].to(device) for k in ['input_ids', 'attention_mask', 'token_type_ids'] if k in data}
+                label = data.get('label', data.get('labels', None))
+                if label is not None and isinstance(label, torch.Tensor):
+                    label = label.to(device)
+                pred = model(**inputs)
+                data = [None, label]
+            except Exception:
+                # fallback: skip this sample
+                return False
     else:
         raise NotImplementedError
 
@@ -476,6 +510,27 @@ def loss_thres_filter(model_type, pred, target, loss_thres):
                 used = True
         else:
             raise NotImplementedError
+            
+    # --- 修正/实现 (1): 实现 kg_bert 的损失阈值过滤 ---
+    elif model_type.startswith('hf_bert') or model_type == 'kg_bert':
+        if isinstance(loss_thres, float):
+            if target is None:
+                #log.warning("loss_thres_filter: 'target' is None, cannot compute loss. Skipping filter.")
+                return True # 如果没有标签，无法计算损失，默认通过
+            
+            criterion = torch.nn.CrossEntropyLoss()
+            # pred.logits 是 [batch_size, num_labels], target 是 [batch_size]
+            # 确保 target 是 long 类型
+            loss = criterion(pred.logits, target.long())
+            if loss > loss_thres:
+                used = False
+            else:
+                used = True
+        else:
+            # loss_thres is False or not a float
+            used = True
+    # --- 结束 修正/实现 (1) ---
+    
     else:
         raise NotImplementedError
     return used
@@ -526,6 +581,21 @@ def flatten(args, acts, layer_name, log, device):
         else:
             # Default flattening
             acts = acts.flatten(end_dim = 1)
+            
+    # --- 修正/实现 (2): 实现 kg_bert 的激活处理 ---
+    elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
+        # acts 形状: [num_samples, sequence_length, hidden_size]
+        if seq_filter == 'only_cls':
+            # 我们只取 [CLS] 标记, 它总是在位置 0
+            acts = acts[:, 0, :]
+        elif seq_filter is None:
+            # 默认行为: 展平所有标记
+            acts = acts.flatten(end_dim = 1)
+        else:
+            log.warning(f" Unsupported seq_filter '{seq_filter}' for {args['model']['type']}. Defaulting to flattening all tokens.")
+            acts = acts.flatten(end_dim = 1)
+    # --- 结束 修正/实现 (2) ---
+            
     else:
         raise NotImplementedError
     return acts
