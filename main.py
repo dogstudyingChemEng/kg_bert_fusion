@@ -47,7 +47,7 @@ def main(exp = None, exp_mod = None, log_file = None):
                 Example: `reports/14_03_2023_regression/1.log`
     """
     # Default experiment
-    EXPERIMENT_CFG_FILE = 'experiments/fuse_hf_vit_cifar10.yaml'
+    EXPERIMENT_CFG_FILE = 'experiments/kg_bert_fusion.yaml'
     LOGGING_LEVEL       = logging.INFO
 
     # Initialize logger
@@ -140,13 +140,13 @@ def main(exp = None, exp_mod = None, log_file = None):
     end_time = time.perf_counter()
     log.info(' Time for OTFusion: {0:.4f} s'.format(end_time - start_time))
     # w_fused['config'] = weights['model_1']['config']
-    model_otfused = get_model(args, w_fused)
+    model_otfused = get_model(args, w_fused, log) # <-- 传递 log
 
     # vanilla fusion
     log.info(" ------- Performing Vanilla Fusion -------\n")
     if not args['fusion']['heterogeneous']:
         start_time = time.perf_counter()
-        model_vanilla_fused = do_vanilla_fusion(args, weights, models[0], models[1])
+        model_vanilla_fused = do_vanilla_fusion(args, weights, models[0], models[1], log) # <-- 传递 log
         end_time = time.perf_counter()
         log.info(' Time for vanilla fusion: {0:.4f} s'.format(end_time - start_time))
     else:
@@ -252,7 +252,7 @@ def load_weights_and_model(args, key):
         raise NotImplementedError
     return weights, model
 
-def get_model(args, weights):
+def get_model(args, weights, log): # <-- 接收 log
     """
     ## Description
     Transforms the nested weights dictionary into a pytorch model object
@@ -462,7 +462,7 @@ def do_otfusion(args, weights, acts, alpha, device, LOGGING_LEVEL, log_file):
         raise NotImplementedError('Unsupported model type: {0}'.format(args['model']['type']))
     return w_fused
 
-def do_vanilla_fusion(args, weights, model_0, model_1):
+def do_vanilla_fusion(args, weights, model_0, model_1, log): # <-- 接收 log
     """
     ## Description
     Perform vanilla fusion of two
@@ -480,7 +480,7 @@ def do_vanilla_fusion(args, weights, model_0, model_1):
     if args['model']['type'] == 'hf_vit':
         if args['fusion']['num_models'] > 2:
             w_vf_fused = multi_model_vanilla(args, weights)
-            model_vanilla_fused = get_model(args, w_vf_fused)
+            model_vanilla_fused = get_model(args, w_vf_fused, log)
         else:
             model_vanilla_fused = vit_helper.get_model('{0}'.format(args['model']['name_0']))
             model_vanilla_fused = vanilla_fusion_old(model_0, model_1, model_vanilla_fused)
@@ -489,7 +489,7 @@ def do_vanilla_fusion(args, weights, model_0, model_1):
     elif args['model']['type'].startswith('hf_bert') or args['model']['type'] == 'kg_bert':
         if args['fusion']['num_models'] > 2:
             w_vf_fused = multi_model_vanilla(args, weights)
-            model_vanilla_fused = get_model(args, w_vf_fused)
+            model_vanilla_fused = get_model(args, w_vf_fused, log)
         else:
             # 需要 num_labels 来实例化基础模型
             data_dir = os.path.join(os.path.dirname(__file__), 'data')

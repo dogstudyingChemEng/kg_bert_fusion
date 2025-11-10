@@ -587,7 +587,9 @@ def flatten(args, acts, layer_name, log, device):
         # acts 形状: [num_samples, sequence_length, hidden_size]
         if seq_filter == 'only_cls':
             # 我们只取 [CLS] 标记, 它总是在位置 0
-            acts = acts[:, 0, :]
+            if acts.dim() == 3:
+                # 我们只取 [CLS] 标记, 它总是在位置 0
+                acts = acts[:, 0, :]
         elif seq_filter is None:
             # 默认行为: 展平所有标记
             acts = acts.flatten(end_dim = 1)

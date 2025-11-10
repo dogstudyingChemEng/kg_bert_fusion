@@ -112,12 +112,23 @@ class GroundMetric:
         if other_coordinates is None:
             matrix = coordinates / torch.norm(coordinates, dim=1, keepdim=True)
             matrix = 1 - matrix @ matrix.t()
+            # --- (修正: 在这里也添加 .cpu().detach().numpy()) ---
+            return matrix.clamp_(min=0).cpu().detach().numpy()
         else:
-            matrix = 1 - torch.div(
+            # --- (修正: 添加 eps 防止 0/0 = NaN) ---
+            eps = 1e-9
+            # 计算 A 和 B 中每个向量的范数 (norm)
+            norm_a = torch.norm(coordinates, dim=1).view(-1, 1)
+            norm_b = torch.norm(other_coordinates, dim=1).view(1, -1)
+            
+            # 计算分母 |A| * |B| + eps
+            denominator = (norm_a @ norm_b) + eps
+            matrix = 1 - torch.div( 
                 coordinates @ other_coordinates.t(),
-                torch.norm(coordinates, dim=1).view(-1, 1) @ torch.norm(other_coordinates, dim=1).view(1, -1)
+                denominator
             )
-        return matrix.clamp_(min=0)
+            # --- (修正: 保持这一行) ---
+            return matrix.clamp_(min=0).cpu().detach().numpy()
 
     def _get_angular(self, coordinates, other_coordinates=None):
         pass

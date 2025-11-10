@@ -63,7 +63,9 @@ def hf_bert_fusion(args: dict, weights: dict, acts: dict, alpha, device: torch.d
         w_we_0 = weights['model_0']['bert']['embeddings']['word_embeddings']
         w_we_1 = weights['model_1']['bert']['embeddings']['word_embeddings']
         w_we_fused, t_out_embed = fc_fusion(args = args, keys = keys, t_in = None, w_0 = w_we_0, w_1 = w_we_1,
-                                            act_0 = w_we_0, act_1 = w_we_1, alpha = alpha, device = device, log = log, last_layer = False, is_embed = True)
+                                    act_0 = acts['model_0']['bert']['embeddings']['word_embeddings'],
+                                    act_1 = acts['model_1']['bert']['embeddings']['word_embeddings'],
+                                    alpha = alpha, device = device, log = log, last_layer = False, is_embed = True)
         w_fused['bert']['embeddings']['word_embeddings'] = {'weight': w_we_fused['weight'].detach()}
 
         log.info(' Fusing position embeddings')
@@ -72,7 +74,9 @@ def hf_bert_fusion(args: dict, weights: dict, acts: dict, alpha, device: torch.d
         # Note: We don't need t_out_pos, as position embeddings are added, not concatenated.
         # We assume the main permutation comes from word_embeddings.
         w_pe_fused, _ = fc_fusion(args = args, keys = keys, t_in = None, w_0 = w_pe_0, w_1 = w_pe_1,
-                                          act_0 = w_pe_0, act_1 = w_pe_1, alpha = alpha, device = device, log = log, last_layer = False, is_embed = True)
+                                    act_0 = acts['model_0']['bert']['embeddings']['position_embeddings'],
+                                    act_1 = acts['model_1']['bert']['embeddings']['position_embeddings'],
+                                    alpha = alpha, device = device, log = log, last_layer = False, is_embed = True)
         w_fused['bert']['embeddings']['position_embeddings'] = {'weight': w_pe_fused['weight'].detach()}
 
         # --- (CORRECTION 2: Add missing token_type_embeddings fusion) ---
@@ -81,7 +85,9 @@ def hf_bert_fusion(args: dict, weights: dict, acts: dict, alpha, device: torch.d
             w_tte_0 = weights['model_0']['bert']['embeddings']['token_type_embeddings']
             w_tte_1 = weights['model_1']['bert']['embeddings']['token_type_embeddings']
             w_tte_fused, _ = fc_fusion(args = args, keys = keys, t_in = None, w_0 = w_tte_0, w_1 = w_tte_1,
-                                              act_0 = w_tte_0, act_1 = w_tte_1, alpha = alpha, device = device, log = log, last_layer = False, is_embed = True)
+                                        act_0 = acts['model_0']['bert']['embeddings']['token_type_embeddings'],
+                                        act_1 = acts['model_1']['bert']['embeddings']['token_type_embeddings'],
+                                        alpha = alpha, device = device, log = log, last_layer = False, is_embed = True)
             w_fused['bert']['embeddings']['token_type_embeddings'] = {'weight': w_tte_fused['weight'].detach()}
         else:
             log.info(' Skipping token type embeddings (not found in model_0)')
@@ -131,6 +137,31 @@ def hf_bert_fusion(args: dict, weights: dict, acts: dict, alpha, device: torch.d
         # update prev_out_acts if activations exist
         if 'model_1' in acts and enc_key in acts['model_1']['bert']['encoder']['layer']:
             prev_out_acts = acts['model_1']['bert']['encoder']['layer'][enc_key].get('data', prev_out_acts)
+            
+        # --- (修正: 融合 Pooler 层) ---
+    if 'pooler' in weights['model_0']['bert']:
+        log.info(' Fusing Pooler')
+        # t_out 是来自最后一个编码器层的T-Map
+        w_pooler_0 = weights['model_0']['bert']['pooler']['dense']
+        w_pooler_1 = weights['model_1']['bert']['pooler']['dense']
+
+        # 激活值 (如果 'type: acts')
+        act_pooler_0 = acts.get('model_0', {}).get('bert', {}).get('pooler', {}).get('data', None)
+        act_pooler_1 = acts.get('model_1', {}).get('bert', {}).get('pooler', {}).get('data', None)
+
+        w_pooler_fused, t_out_pooler = fc_fusion(args = args, keys = keys, t_in = t_out,
+                                                w_0 = w_pooler_0, w_1 = w_pooler_1,
+                                                act_0 = act_pooler_0, act_1 = act_pooler_1,
+                                                alpha = alpha, device = device, log = log, last_layer=False)
+
+        w_fused['bert']['pooler'] = {'dense': w_pooler_fused}
+
+        # 将 Pooler 的 T-map 传递给分类器
+        t_out = t_out_pooler
+    else:
+        log.info(' Skipping Pooler fusion (not found in model_0)')
+        w_fused['bert']['pooler'] = copy.deepcopy(weights['model_1']['bert'].get('pooler', {}))
+    # --- (结束修正) ---
 
     # fuse classifier (BERT classification head usually 'classifier')
     if args['fusion'].get('fuse_gen', False) and 'classifier' in weights['model_0']:

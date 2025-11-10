@@ -10,6 +10,20 @@ import numpy as np
 from ground_metric import GroundMetric
 from utils import matrix_stats, dict_get, dict_write, matrix_to_heatmap
 
+
+# --- (新增辅助函数) ---
+def dict_path_exists(d, keys):
+    """安全地检查嵌套字典中是否存在某个路径。"""
+    if d is None:
+        return False
+    temp_d = d
+    for k in keys:
+        if isinstance(temp_d, dict) and k in temp_d:
+            temp_d = temp_d[k]
+        else:
+            return False
+    return True
+
 #----------------#
 # Encoder Fusion #
 #----------------#
@@ -154,18 +168,23 @@ def encoder_fusion(args: dict, keys: dict, w_0: dict, w_1: dict, acts_0: dict, a
         
         # 确定 Resid1 的激活 (用于加权)
         if is_bert_model:
-            # BERT Resid1 的激活是 LN0 的输出
-            resid_acts = dict_get(ln0_keys + ['data'], acts_1) if acts_1 and dict_get(ln0_keys, acts_1) else None
+        # BERT: 使用 LN0 的输出作为 Resid1 激活的近似值
+            resid_acts = dict_get(ln0_keys, acts_1) if dict_path_exists(acts_1, ln0_keys) else None
         else:
-            # ViT Resid1 的激活是 SA 的输出
-            resid_acts = dict_get(sa_keys + ['data'], acts_1) if acts_1 and dict_get(sa_keys, acts_1) else None
+            # ViT Resid1's activation is the SA's output
+            resid_acts = dict_get(sa_keys + ['data'], acts_1) if dict_path_exists(acts_1, sa_keys + ['data']) else None
         
         # 如果找不到激活, 使用 prev_out_acts (来自上一层的 Resid2) 作为粗略近似
         if resid_acts is None:
             resid_acts = prev_out_acts 
 
         # 确定 FFN/LN1 的激活 (用于加权)
-        in_acts = dict_get(ff1_keys, acts_1) if acts_1 and dict_get(ff1_keys, acts_1) else None
+        if is_bert_model:
+            # BERT: 激活值是 LN1 (ln1_keys) 的输出
+            in_acts = dict_get(ln1_keys, acts_1) if dict_path_exists(acts_1, ln1_keys) else None
+        else:
+            # ViT: 激活值是 FFN (ff1_keys) 的输出
+            in_acts = dict_get(ff1_keys, acts_1) if dict_path_exists(acts_1, ff1_keys) else None
 
         t_out = resid_policy(policy = args.get('fusion').get('resid_policy'), t_resid = t_resid, t_in = t_out, 
                              resid_acts = resid_acts, 

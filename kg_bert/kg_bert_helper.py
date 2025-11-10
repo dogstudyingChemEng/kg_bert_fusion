@@ -138,10 +138,10 @@ def preprocess_kgbert_single(example, tokenizer, label_map, max_len):
     label_id = label_map[example['label']]
     
     return {
-        "input_ids": torch.tensor(input_ids, dtype=torch.long),
-        "attention_mask": torch.tensor(input_mask, dtype=torch.long),
-        "token_type_ids": torch.tensor(segment_ids, dtype=torch.long),
-        "label": label_id
+    "input_ids": input_ids,
+    "attention_mask": input_mask,
+    "token_type_ids": segment_ids,
+    "label": label_id
     }
 
 def collate_fn_kgbert(examples):
@@ -149,9 +149,9 @@ def collate_fn_kgbert(examples):
     将来自 preprocess_kgbert_single 的 Tensors 堆叠成一个批次。
     (替换 collate_fn)
     """
-    input_ids = torch.stack([example["input_ids"] for example in examples])
-    attention_mask = torch.stack([example["attention_mask"] for example in examples])
-    token_type_ids = torch.stack([example["token_type_ids"] for example in examples])
+    input_ids = torch.tensor([example["input_ids"] for example in examples], dtype=torch.long)
+    attention_mask = torch.tensor([example["attention_mask"] for example in examples], dtype=torch.long)
+    token_type_ids = torch.tensor([example["token_type_ids"] for example in examples], dtype=torch.long)
     labels = torch.tensor([example["label"] for example in examples], dtype=torch.long)
     
     return {
