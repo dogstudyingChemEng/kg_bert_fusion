@@ -157,6 +157,43 @@ def main(exp = None, exp_mod = None, log_file = None):
     del acts
     torch.cuda.empty_cache()
 
+
+
+    log.info(" ------- Saving Fused Models -------")
+    # 1. 定义保存路径 (您可以自定义这些路径)
+    output_dir_ot = os.path.join(os.path.dirname(__file__), "models", "kg-bert-fused-ot")
+    output_dir_vf = os.path.join(os.path.dirname(__file__), "models", "kg-bert-fused-vf")
+
+    # 确保目录存在
+    os.makedirs(output_dir_ot, exist_ok=True)
+    os.makedirs(output_dir_vf, exist_ok=True)
+
+    # 2. 保存 OT-fused 模型
+    # (Hugging Face 的 .save_pretrained 会自动保存 config.json 和 pytorch_model.bin)
+    log.info(f" Saving OT-fused model to {output_dir_ot}")
+    model_otfused.save_pretrained(output_dir_ot)
+
+    # 3. 保存 Vanilla-fused 模型
+    if not args['fusion']['heterogeneous']:
+        log.info(f" Saving Vanilla-fused model to {output_dir_vf}")
+        model_vanilla_fused.save_pretrained(output_dir_vf)
+    
+    # 4. 保存 Tokenizer (对于重新加载至关重要)
+    # 我们假设使用锚点模型 (model_1) 的 tokenizer
+    log.info(f" Saving tokenizer to both directories")
+    try:
+        # 假设 name_1 是一个有效的模型路径，例如 'models/kg-bert-2'
+        tokenizer_path = args['model']['name_1']
+        tokenizer = BertTokenizer.from_pretrained(tokenizer_path, do_lower_case=True)
+        tokenizer.save_vocabulary(output_dir_ot)
+        if not args['fusion']['heterogeneous']:
+            tokenizer.save_vocabulary(output_dir_vf)
+    except Exception as e:
+        log.warning(f"Could not load or save tokenizer from {args['model']['name_1']}. Error: {e}")
+        log.warning("You will need to manually save a 'vocab.txt' file in the model directories to reload them.")
+    
+    log.info(" --- Finished Saving Fused Models ---")
+
     # Evaluation
     log.info(" ------- Evaluating Models -------")
     test_dataloader = get_test_dataloader(args, device)
