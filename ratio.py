@@ -141,7 +141,6 @@ def main():
         disk_reduction_pct = 0.0
     print(f"显存占用减少的百分比为: {disk_reduction_pct:.2f}%")
 
-
     print(f"两个KG-BERT模型的总参数量: {total12} ({humanize(total12)})")
     print(f"融合后模型的参数量: {nf} ({humanize(nf)})")
 

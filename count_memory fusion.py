@@ -50,7 +50,7 @@ def main():
         './models/kg-bert-fused-vf'
     ]
     
-    print("模型参数统计报告")
+    print("模型显存统计报告")
     print("=" * 80)
     
     total_stats = []
@@ -76,10 +76,10 @@ def main():
         params_billions = total_params / 1e9
         
         print(f"\n模型: {model_dir}")
-        print(f"- 参数总量: {total_params:,}")
-        print(f"- 参数总量: {params_millions:.2f} M")
-        print(f"- 参数总量: {params_billions:.4f} B")
-        # print(f"- 模型文件大小: {file_size:.2f} MB")
+        #print(f"- 参数总量: {total_params:,}")
+        #print(f"- 参数总量: {params_millions:.2f} M")
+        #print(f"- 参数总量: {params_billions:.4f} B")
+        print(f"- 模型占用显存大小: {file_size:.2f} MB")
         
         # 显示配置中的关键信息
         if config:

@@ -249,7 +249,7 @@ def main():
 
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
-                        level=logging.INFO)
+                        level=logging.ERROR)
 
     logger.info("device: {} n_gpu: {}".format(device, n_gpu))
 
@@ -352,7 +352,7 @@ def main():
             nb_eval_steps = 0
             preds = []
 
-            # 记录模型推理开始时间
+            # 记录模型推理开始时间Q
             inference_start_time = time.time()
             
             for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Testing"):

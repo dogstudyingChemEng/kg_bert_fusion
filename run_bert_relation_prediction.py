@@ -22,6 +22,7 @@ import csv
 import logging
 import os
 import random
+import shutil
 import sys
 import time
 
@@ -421,7 +422,7 @@ def main():
 
     logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt = '%m/%d/%Y %H:%M:%S',
-                        level = logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+                        level = logging.ERROR if args.local_rank in [-1, 0] else logging.WARN)
 
     logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
         device, n_gpu, bool(args.local_rank != -1), args.fp16))
@@ -443,7 +444,8 @@ def main():
         raise ValueError("At least one of `do_train` or `do_eval` must be True.")
 
     if os.path.exists(args.output_dir) and os.listdir(args.output_dir) and args.do_train:
-        raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
+        shutil.rmtree(args.output_dir)
+        # raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 

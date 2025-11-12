@@ -48,9 +48,24 @@ python main.py kg_bert_fusion.yaml
 ```
 python count_parameters.py
 ```
-查看推理耗时：
+
+模型训练耗时：
 ```
-python inference_time.py --data_dir ./data/FB15K --bert_model bert-base-uncased --output_dir models/kg-bert-1 --eval_batch_size 128 --task_name kg --do_predict
+bash get_train_time_seed42_log.sh
+```
+```
+bash get_train_time_seed666_log.sh
+```
+```
+bash get_train_time_ot_log.sh
+```
+```
+bash get_train_time_vf_log.sh
+```
+
+模型推理耗时：
+```
+python inference_time.py --data_dir ./data/FB15K --bert_model bert-base-uncased --output_dir models/kg-bert-1 --eval_batch_size 1024 --task_name kg --do_predict
 ```
 ---
 

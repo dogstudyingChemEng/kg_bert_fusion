@@ -1,0 +1,1 @@
+python inference_time.py --data_dir ./data/FB15K --bert_model bert-base-uncased --output_dir models/kg-bert-fused-ot --eval_batch_size 1024 --task_name kg --do_predict
