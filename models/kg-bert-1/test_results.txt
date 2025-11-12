@@ -1,4 +1,9 @@
 acc = 0.7235868700377511
-eval_loss = 0.6216739734698986
-global_step = 2360
-loss = 0.5243061068704573
+avg_time_per_sample = 2.1802244097444934
+data_preprocess_time = 5.448464393615723
+eval_loss = 0.6211188314926057
+inference_time = 128.78803610801697
+model_load_time = 2.598747730255127
+num_samples = 59071
+postprocess_time = 6.074601173400879
+total_time = 143.9545111656189

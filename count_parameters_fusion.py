@@ -46,8 +46,8 @@ def read_config(model_dir):
 def main():
     # 模型目录列表
     model_dirs = [
-        './models/kg-bert-1',
-        './models/kg-bert-2', 
+        './models/kg-bert-fused-ot',
+        './models/kg-bert-fused-vf'
     ]
     
     print("模型参数统计报告")

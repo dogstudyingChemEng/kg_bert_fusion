@@ -40,12 +40,17 @@ pip install -r requirements.txt
 3.  **Download the zipped folder with the two Transformer models from this [link](https://drive.google.com/file/d/1ez2VqveQSJyBJ0WlzdrsFetoIruZU4Ph/view?usp=sharing) and extract the `models` folder into root of the repository.**
 
 4. **Run the `main.py` script as follows:**
-```
-python main.py fuse_hf_vit_cifar10.yaml
-```
-kg-bert的实验：
+kg-bert融合的实验：
 ```
 python main.py kg_bert_fusion.yaml
+```
+统计模型参数：
+```
+python count_parameters.py
+```
+查看推理耗时：
+```
+python inference_time.py --data_dir ./data/FB15K --bert_model bert-base-uncased --output_dir models/kg-bert-1 --eval_batch_size 128 --task_name kg --do_predict
 ```
 ---
 
