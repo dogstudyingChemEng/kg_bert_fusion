@@ -56,7 +56,7 @@ def extract_training_times(log_file="record.txt"):
 
 if __name__ == "__main__":
     time = []
-    files = ["record_seed42.txt", "record_seed666.txt", "record_ot.txt"]
+    files = ["record_seed42.txt", "record_seed666.txt", "record_fused_ot.txt"]
     for file in files:
         print(f"Processing file: {file}")
         time.append(extract_training_times(log_file=file))

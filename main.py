@@ -460,7 +460,7 @@ def get_test_dataloader(args, device):
         test_ds = test_ds.map(transform_func) # 应用转换
 
         # 从 args 中获取评估批次大小，默认为 8 (类似 run_bert_relation_prediction.py)
-        eval_batch_size = args.get('eval_batch_size', 8) 
+        eval_batch_size = args.get('eval_batch_size', 1024) 
 
         test_dataloader = torch.utils.data.DataLoader(
             dataset=test_ds,

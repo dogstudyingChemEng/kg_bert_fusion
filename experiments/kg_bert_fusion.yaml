@@ -41,7 +41,7 @@ fusion:
   
   # 激活值处理配置
   acts:
-    num_samples: 40    # 用于计算OT的样本数，可以先设小一点测试
+    num_samples: 20    # 用于计算OT的样本数，可以先设小一点测试
     seq_pos: -1        # 使用序列中的所有位置
     avg_seq_items: False # 对序列中的token取平均
     seq_filter: 'only_cls'

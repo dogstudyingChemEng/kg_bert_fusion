@@ -1,6 +1,7 @@
+echo
+echo "Task 1"
 echo "测试步骤：分别查看待合并的2个模型的训练和推断时间复杂度"
 echo "预期结果：输出待合并的2个模型的训练和推断耗时"
-echo
 echo
 echo "KG-BERT-1训练开始"
 python3 run_bert_relation_prediction.py --task_name kg --do_train --data_dir ./data/FB15K --bert_model bert-base-cased --max_seq_length 25 --train_batch_size 2048 --learning_rate 5e-5 --num_train_epochs 1 --output_dir ./tmp/kg-bert --gradient_accumulation_steps 1  
